@@ -1,0 +1,26 @@
+simulation:
+  farms: 4
+  gateways_per_farm: 25
+  devices_per_gateway: 100
+  duration_seconds: 70
+  device_send_rate_per_min: 30  # each device sends ~30 messages/minute
+  jitter_ms: 500
+
+gateway:
+  aggregate_window_seconds: 10
+  parquet_write_interval_seconds: 30
+  out_dir: ./data_simulator/out/
+  kafka_topic_telemetry: farm_telemetry
+  kafka_topic_alerts: farm_alerts_critical
+
+alerts:
+  cooldown_seconds: 20
+  # thresholds are per-metric; each threshold is [warning_min, warning_max, critical_min, critical_max]
+  thresholds:
+    temperature: {warning: [5, 35], critical: [0, 45]}
+    humidity: {warning: [20, 80], critical: [10, 90]}
+    soil_moisture: {warning: [10, 60], critical: [5, 80]}
+    light_level: {warning: [100, 60000], critical: [50, 120000]}
+
+producer:
+  kafka_bootstrap_servers: localhost:9092
