@@ -94,7 +94,7 @@ services:
       - "8889:8889"
       - 4040-4045:4040-4045
     volumes:
-      - ./spark-logs:/opt/spark/spark-events
+      - ./data/spark-logs:/opt/spark/spark-events
       - ./spark/apps:/opt/spark/apps
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
@@ -127,7 +127,7 @@ services:
     environment:
       - SPARK_MODE=history
     volumes:
-      - ./spark-logs:/opt/spark/spark-events
+      - ./data/spark-logs:/opt/spark/spark-events
     ports:
       - 18080:18080
     depends_on:
