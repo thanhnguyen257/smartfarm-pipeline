@@ -1,112 +1,129 @@
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.7.0
-    hostname: zookeeper
     container_name: zookeeper
-    ports:
-      - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
 
   broker1:
     image: confluentinc/cp-server:7.7.0
-    hostname: broker1
     container_name: broker1
     depends_on:
       - zookeeper
     ports:
       - "9092:9092"
-      - "9101:9101"
+      - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker1:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_JMX_PORT: 9101
-      KAFKA_JMX_HOSTNAME: localhost
-      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: broker1:29092
-      CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
-      CONFLUENT_METRICS_ENABLE: 'true'
-      CONFLUENT_SUPPORT_CUSTOMER_ID: 'anonymous'
-  
-  # broker2:
-  #   image: confluentinc/cp-server:7.7.0
-  #   hostname: broker2
-  #   container_name: broker2
-  #   depends_on:
-  #     - zookeeper
-  #   ports:
-  #     - "9093:9093"
-  #     - "9102:9102"
-  #   environment:
-  #     KAFKA_BROKER_ID: 2
-  #     KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-  #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker2:29092,PLAINTEXT_HOST://localhost:9093
-  #     KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
-  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-  #     KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-  #     KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
-  #     KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
-  #     KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-  #     KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-  #     KAFKA_JMX_PORT: 9102
-  #     KAFKA_JMX_HOSTNAME: localhost
-  #     CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: broker2:29092
-  #     CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
-  #     CONFLUENT_METRICS_ENABLE: 'true'
-  #     CONFLUENT_SUPPORT_CUSTOMER_ID: 'anonymous'
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test: ["CMD", "cub", "kafka-ready", "-b", "broker1:29092", "1", "20"]
+      interval: 5s
+      retries: 5
+
+  kafka-setup:
+    build: ./kafka
+    image: kafka-setup-image
+    container_name: kafka-setup
+    depends_on:
+      broker1:
+        condition: service_healthy
 
   control-center:
     image: confluentinc/cp-enterprise-control-center:7.7.0
-    hostname: control-center
     container_name: control-center
     depends_on:
       - broker1
     ports:
       - "9021:9021"
     environment:
-      CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker1:29092,broker2:29092'
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: broker1:29092
       CONTROL_CENTER_REPLICATION_FACTOR: 1
-      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
       CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
       CONFLUENT_METRICS_TOPIC_REPLICATION: 1
       PORT: 9021
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.6
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.19.6
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_NAME=kibana
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
   spark-master:
-    container_name: spark-master
-    build:
-      context: ./spark
+    build: ./spark
     image: spark-image
+    container_name: spark-master
     environment:
       - SPARK_MODE=master
     ports:
-      - 7077:7077
-      - 8080:8080
+      - "7077:7077"
+      - "8080:8080"
+      - "8889:8889"
       - 4040-4045:4040-4045
     volumes:
       - ./spark-logs:/opt/spark/spark-events
+      - ./spark/apps:/opt/spark/apps
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 5s
+      retries: 10
 
 
   spark-worker:
-    container_name: spark-worker
     image: spark-image
+    container_name: spark-worker
     environment:
       - SPARK_MODE=worker
     depends_on:
       - spark-master
 
-  spark-history:
-    container_name: spark-history
+  spark-job:
     image: spark-image
+    container_name: spark-job
+    environment:
+      - SPARK_MODE=job
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      kafka-setup:
+        condition: service_completed_successfully
+
+  spark-history:
+    image: spark-image
+    container_name: spark-history
     environment:
       - SPARK_MODE=history
     volumes:
@@ -116,38 +133,31 @@ services:
     depends_on:
       - spark-master
 
-  elasticsearch:
-    container_name: elasticsearch
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.6
-    environment:
-      - discovery.type=single-node
-      - bootstrap.memory_lock=true
-      - xpack.security.enabled=false
-      - xpack.monitoring.collection.enabled=true
-      - ES_JAVA_OPTS=-Xms1g -Xmx1g
-    volumes:
-      - es-data:/usr/share/elasticsearch/data
-    ports:
-      - "9200:9200"
-      - "9300:9300" 
-    # deploy:
-    #   resources:
-    #     limits:
-    #       cpus: "2.0"
-    #       memory: 2g
-    #     reservations:
-    #       memory: 1g
+  # # run the python simulator inside container to avoid host env differences.
+  # simulator:
+  #   image: python:3.11-slim
+  #   container_name: simulator
+  #   command: bash -c "pip install -r /opt/app/requirements.txt && python /opt/app/simulator.py --config /opt/app/config/demo_config.yml --mode file"
+  #   volumes:
+  #     - ./:/opt/app
+  #   depends_on:
+  #     - broker1
+  #   # scale this service if you want multiple simulator instances (see instructions below)
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
 
-  kibana:
-    container_name: kibana
-    image: docker.elastic.co/kibana/kibana:8.19.6
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - SERVER_NAME=kibana
-    ports:
-      - "5601:5601"
-    depends_on:
-      - elasticsearch
+  # # optional spark job container: will run Spark submit and stream data from Kafka -> ES
+  # spark-job:
+  #   image: python:3.11-slim
+  #   container_name: spark-job
+  #   command: bash -c "pip install pyspark requests sqlite3 || true; python /opt/app/spark/enrich_stream.py --kafka bootstrap:localhost:9092 --sqlite /opt/app/data/locations.db --es http://elasticsearch:9200"
+  #   volumes:
+  #     - ./:/opt/app
+  #   depends_on:
+  #     - spark-master
+  #     - broker1
+  #     - elasticsearch
 
 volumes:
   es-data:
