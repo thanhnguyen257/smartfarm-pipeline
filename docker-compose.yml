@@ -70,6 +70,20 @@ services:
       - "9200:9200"
     volumes:
       - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      retries: 5
+
+  elasticsearch-setup:
+    build: ./elasticsearch
+    image: elasticsearch-setup-image
+    container_name: elasticsearch-setup
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      kafka-setup:
+        condition: service_completed_successfully
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.19.6
