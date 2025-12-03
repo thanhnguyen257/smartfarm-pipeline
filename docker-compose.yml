@@ -97,7 +97,9 @@ services:
       - elasticsearch
 
   spark-master:
-    build: ./spark
+    build:
+      context: .
+      dockerfile: ./spark/Dockerfile
     image: spark-image
     container_name: spark-master
     environment:

@@ -26,7 +26,7 @@ ENV PYSPARK_DRIVER_PYTHON_OPTS="notebook --no-browser --allow-root --ip=0.0.0.0 
 # COPY jars/commons-pool2-2.12.0.jar $SPARK_HOME/jars/commons-pool2-2.12.0.jar
 # COPY jars/spark-streaming-kafka-0-10_2.12-3.3.0.jar $SPARK_HOME/jars/spark-streaming-kafka-0-10_2.12-3.3.0.jar
 # COPY jars/spark-token-provider-kafka-0-10_2.12-3.3.0.jar $SPARK_HOME/jars/spark-token-provider-kafka-0-10_2.12-3.3.0.jar
-COPY jars/ $SPARK_HOME/jars/
+COPY spark/jars/ $SPARK_HOME/jars/
 
 
 # RUN curl -Lo $SPARK_HOME/jars/elasticsearch-spark-30_2.12-8.19.6.jar \
@@ -44,12 +44,12 @@ ENV PYSPARK_PYTHON=python3 \
 
 WORKDIR $SPARK_HOME
 
-COPY conf/spark-defaults.conf $SPARK_HOME/conf/
-COPY enrich_stream.py /opt/
+COPY spark/conf/spark-defaults.conf $SPARK_HOME/conf/
+COPY spark/enrich_stream.py /opt/
 COPY data/locations.db /opt/
 RUN mkdir -p $SPARK_HOME/spark-events
 
-COPY entrypoint.sh /opt/
+COPY spark/entrypoint.sh /opt/
 RUN chmod +x /opt/entrypoint.sh
 
 ENTRYPOINT ["/opt/entrypoint.sh"]
