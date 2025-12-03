@@ -30,6 +30,35 @@ FARM_ENRICHED_TELEMETRY_SETTINGS='{
   "settings": {
     "number_of_shards": 1,
     "number_of_replicas": 0
+  },
+  "mappings": {
+    "properties": {
+      "device_id": { "type": "keyword" },
+      "gateway_id": { "type": "keyword" },
+      "farm_id": { "type": "keyword" },
+      "gateway_ts": { "type": "long" },
+      "gateway_ts_iso": { "type": "date" },
+      "count": { "type": "integer" },
+      "temperature_avg": { "type": "float" },
+      "temperature_min": { "type": "float" },
+      "temperature_max": { "type": "float" },
+      "temperature_std": { "type": "float" },
+      "humidity_avg": { "type": "float" },
+      "humidity_min": { "type": "float" },
+      "humidity_max": { "type": "float" },
+      "humidity_std": { "type": "float" },
+      "soil_moisture_avg": { "type": "float" },
+      "soil_moisture_min": { "type": "float" },
+      "soil_moisture_max": { "type": "float" },
+      "soil_moisture_std": { "type": "float" },
+      "light_level_avg": { "type": "float" },
+      "light_level_min": { "type": "float" },
+      "light_level_max": { "type": "float" },
+      "light_level_std": { "type": "float" },
+      "device_location": { "type": "geo_point" },
+      "gateway_location": { "type": "geo_point" },
+      "farm_location": { "type": "geo_point" }
+    }
   }
 }'
 
@@ -37,6 +66,17 @@ FARM_ALERTS_CRITICAL_SETTINGS='{
   "settings": {
     "number_of_shards": 1,
     "number_of_replicas": 0
+  },
+  "mappings": {
+    "properties": {
+      "device_id": { "type": "keyword" },
+      "gateway_id": { "type": "keyword" },
+      "farm_id": { "type": "keyword" },
+      "gateway_ts": { "type": "long" },
+      "gateway_ts_iso": { "type": "date" },
+      "state": { "type": "keyword" },
+      "details": { "type": "object" }
+    }
   }
 }'
 

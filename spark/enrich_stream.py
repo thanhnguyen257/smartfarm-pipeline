@@ -149,7 +149,13 @@ def main(args):
         .withColumn("gateway_lon", get_json_object(col("loc_json"), "$.gateway_lon")) \
         .withColumn("device_lat", get_json_object(col("loc_json"), "$.device_lat")) \
         .withColumn("device_lon", get_json_object(col("loc_json"), "$.device_lon")) \
-        .drop("loc_json")
+        .withColumn("farm_location", struct(col("farm_lat").cast("double").alias("lat"),
+                                            col("farm_lon").cast("double").alias("lon"))) \
+        .withColumn("gateway_location", struct(col("gateway_lat").cast("double").alias("lat"),
+                                            col("gateway_lon").cast("double").alias("lon"))) \
+        .withColumn("device_location", struct(col("device_lat").cast("double").alias("lat"),
+                                            col("device_lon").cast("double").alias("lon"))) \
+        .drop("loc_json", "farm_lat", "farm_lon", "gateway_lat", "gateway_lon", "device_lat", "device_lon")
 
     # kafka_out_df = final_df.select(to_json(struct([col(c) for c in final_df.columns])).alias("value"))
 
