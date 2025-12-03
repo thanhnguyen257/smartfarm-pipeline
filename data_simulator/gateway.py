@@ -98,23 +98,24 @@ class Gateway:
             if not batch:
                 continue
 
-            grouped = {}
-            seen = set()
+            device_grouped = {}
+            seen_devices = set()
             cooldown = self.cfg['alerts']['cooldown_seconds']
             for t in batch:
-                gateway_id = self._map_device_gateway[t.device_id]
-
                 t.temperature = clamp(t.temperature, -10, 60)       # temperature (°C)
                 t.humidity = clamp(t.humidity, 0, 100)              # humidity (%)
                 t.soil_moisture = clamp(t.soil_moisture, 0, 100)    # soil moisture (%)
                 t.light_level = clamp(t.light_level, 0, 120000)     # lux
 
-                grouped.setdefault(gateway_id, []).append(t)
+                device_grouped.setdefault(t.device_id, []).append(t)
+                gateway_id = self._map_device_gateway[t.device_id]
                 now = time.time()
                 
-                gateway_info = { 'gateway_id': gateway_id,
-                                 'gateway_ts': int(now * 1000),
-                                 'gateway_ts_iso': datetime.fromtimestamp(now, tz=timezone.utc).isoformat() }
+                gateway_info = {
+                    'gateway_id': gateway_id,
+                    'gateway_ts': int(now * 1000),
+                    'gateway_ts_iso': datetime.fromtimestamp(now, tz=timezone.utc).isoformat()
+                }
                 self._parquet_buffer.append(t.to_dict() | gateway_info)
 
                 state, details = self._compute_state(t)
@@ -133,12 +134,13 @@ class Gateway:
                     
                     self.producer.send_alert(alert)
                     self._last_info[t.device_id]['last_alert_ts'] = now
+
                 self._last_info[t.device_id]['last_state'] = state
-                seen.add(t.device_id)
                 self._last_info[t.device_id]['last_ts'] = now
+                seen_devices.add(t.device_id)
 
             offline_threshold = self.cfg['alerts']['offline_threshold_seconds']
-            for device_id in self._map_device_gateway.keys() - seen:
+            for device_id in self._map_device_gateway.keys() - seen_devices:
                 prev = self._last_info.get(device_id, {})
                 prev_seen = prev.get('last_ts', 0)
                 now = time.time()
@@ -154,22 +156,34 @@ class Gateway:
                     self.producer.send_alert(alert)
                     self._last_info[device_id]['last_alert_ts'] = now
 
-            for k, items in grouped.items():
+            for device_id, items in device_grouped.items():
                 data = np.array(
                     [(t.temperature, t.humidity, t.soil_moisture, t.light_level) for t in items],
                     dtype=[('temp', 'f4'), ('hum', 'f4'), ('soil', 'f4'), ('light', 'f4')]
                 )
                 now = time.time()
                 out = {
-                    'gateway_id': k,
+                    'device_id': device_id,
+                    'gateway_id': gateway_id,
                     'gateway_ts': int(now * 1000),
                     'gateway_ts_iso': datetime.fromtimestamp(now, tz=timezone.utc).isoformat(),
                     'count': len(items),
                     'temperature_avg': float(data['temp'].mean()),
+                    'temperature_min': float(data['temp'].min()),
+                    'temperature_max': float(data['temp'].max()),
+                    'temperature_std': float(data['temp'].std()),
                     'humidity_avg': float(data['hum'].mean()),
+                    'humidity_min': float(data['hum'].min()),
+                    'humidity_max': float(data['hum'].max()),
+                    'humidity_std': float(data['hum'].std()),
                     'soil_moisture_avg': float(data['soil'].mean()),
+                    'soil_moisture_min': float(data['soil'].min()),
+                    'soil_moisture_max': float(data['soil'].max()),
+                    'soil_moisture_std': float(data['soil'].std()),
                     'light_level_avg': float(data['light'].mean()),
-                    # add min, max, variance if needed
+                    'light_level_min': float(data['light'].min()),
+                    'light_level_max': float(data['light'].max()),
+                    'light_level_std': float(data['light'].std()),
                 }
                 self.producer.send_telemetry(out)
 
