@@ -6,6 +6,33 @@ import argparse
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_json, udf, to_json, struct, get_json_object, lit
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType, LongType
+import requests
+
+def send_to_es(df, epoch_id, es_url, output_index="farm_enriched_telemetry"):
+    """
+    Send Spark microbatch to Elasticsearch via REST Bulk API.
+    """
+    if df.rdd.isEmpty():
+        return
+
+    rows = df.toJSON().collect()
+
+    bulk_body = ""
+    for r in rows:
+        bulk_body += '{ "index": { "_index": "farm_enriched_telemetry" } }\n'
+        bulk_body += r + "\n"
+
+    # POST to _bulk
+    resp = requests.post(
+        f"{es_url}/_bulk",
+        data=bulk_body,
+        headers={"Content-Type": "application/x-ndjson"}
+    )
+
+    if resp.status_code >= 300:
+        print("Bulk insert error:", resp.text)
+    else:
+        print("Inserted batch:", len(rows))
 
 def load_locations(db_path):
     conn = sqlite3.connect(db_path)
@@ -75,9 +102,6 @@ def main(args):
         SparkSession.builder
         .appName("farm-enrichment")
         .config("spark.sql.streaming.schemaInference", "true")
-        .config("es.nodes", args.es)
-        .config("es.nodes.wan.only", "true")
-        .config("es.batch.write.refresh", "false")
         .getOrCreate()
     )
 
@@ -137,12 +161,11 @@ def main(args):
     #     .outputMode("append") \
     #     .start()
 
-    es_df = final_df.withColumn("_index", lit("farm_enriched_telemetry"))
-
-    es_query = es_df.writeStream \
-        .format("es") \
-        .option("checkpointLocation", "/tmp/spark_checkpoint/farm_enrich_es") \
+    # es_df = final_df.withColumn("_index", lit("farm_enriched_telemetry"))
+    es_query = final_df.writeStream \
         .outputMode("append") \
+        .foreachBatch(lambda df, epoch_id: send_to_es(df, epoch_id, args.es, args.output_topic)) \
+        .option("checkpointLocation", "/tmp/spark_checkpoint/farm_enrich_es_http") \
         .start()
     
     spark.streams.awaitAnyTermination()
