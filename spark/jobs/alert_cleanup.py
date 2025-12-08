@@ -11,7 +11,7 @@ from pyspark.sql.functions import col, from_json, udf, struct, to_json, get_json
 from pyspark.sql.types import ArrayType, StructType, StructField, StringType, LongType
 
 
-RAW_LOG_DIR = "/opt/raw_logs"
+RAW_LOG_DIR = "/opt/alert_logs"
 RAW_LOG_WINDOW = 300
 _raw_log_last = 0
 _raw_log_file = None

@@ -35,6 +35,7 @@ COPY spark/conf/spark-defaults.conf $SPARK_HOME/conf/
 COPY spark/jobs/ /opt/
 COPY data/locations.db /opt/
 RUN mkdir -p $SPARK_HOME/spark-events
+RUN mkdir -p /opt/alert_logs
 
 COPY spark/entrypoint.sh /opt/
 RUN chmod +x /opt/entrypoint.sh
