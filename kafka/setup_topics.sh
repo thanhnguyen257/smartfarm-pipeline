@@ -18,7 +18,7 @@ kafka-topics --bootstrap-server broker1:29092 \
 kafka-topics --bootstrap-server broker1:29092 \
   --create \
   --if-not-exists \
-  --topic farm_enriched_telemetry \
+  --topic farm_raw_alerts \
   --partitions 1 \
   --replication-factor 1 \
   --config retention.ms=3600000 \
@@ -27,7 +27,7 @@ kafka-topics --bootstrap-server broker1:29092 \
 kafka-topics --bootstrap-server broker1:29092 \
   --create \
   --if-not-exists \
-  --topic farm_alerts_critical \
+  --topic farm_cleaned_alerts \
   --partitions 1 \
   --replication-factor 1 \
   --config retention.ms=3600000 \

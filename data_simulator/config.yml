@@ -21,12 +21,12 @@ alerts:
     soil_moisture: {critical: [5, 80]}
     light_level: {critical: [50, 120000]}
   offline_threshold_seconds: 120
+  recovery_min_time_seconds: 5
 
 kafka:
   bootstrap_servers: localhost:9092
   topic_raw_telemetry: farm_raw_telemetry
-  topic_enriched_telemetry: farm_enriched_telemetry
-  topic_alerts: farm_alerts_critical
+  topic_alerts: farm_raw_alerts
 
 data:
   locations_db: ./data/locations.db

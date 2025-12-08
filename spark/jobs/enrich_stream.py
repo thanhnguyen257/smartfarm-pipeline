@@ -19,10 +19,9 @@ def send_to_es(df, epoch_id, es_url, output_index="farm_enriched_telemetry"):
 
     bulk_body = ""
     for r in rows:
-        bulk_body += '{ "index": { "_index": "farm_enriched_telemetry" } }\n'
+        bulk_body += f'{{ "index": {{ "_index": {output_index} }} }}\n'
         bulk_body += r + "\n"
 
-    # POST to _bulk
     resp = requests.post(
         f"{es_url}/_bulk",
         data=bulk_body,

@@ -62,7 +62,7 @@ FARM_ENRICHED_TELEMETRY_SETTINGS='{
   }
 }'
 
-FARM_ALERTS_CRITICAL_SETTINGS='{
+FARM_CLEANED_ALERTS_SETTINGS='{
   "settings": {
     "number_of_shards": 1,
     "number_of_replicas": 0
@@ -75,12 +75,15 @@ FARM_ALERTS_CRITICAL_SETTINGS='{
       "gateway_ts": { "type": "long" },
       "gateway_ts_iso": { "type": "date" },
       "state": { "type": "keyword" },
-      "details": { "type": "object" }
+      "details": { "type": "object" },
+      "device_location": { "type": "geo_point" },
+      "gateway_location": { "type": "geo_point" },
+      "farm_location": { "type": "geo_point" }
     }
   }
 }'
 
 create_index "farm_enriched_telemetry" "$FARM_ENRICHED_TELEMETRY_SETTINGS"
-create_index "farm_alerts_critical" "$FARM_ALERTS_CRITICAL_SETTINGS"
+create_index "farm_cleaned_alerts" "$FARM_CLEANED_ALERTS_SETTINGS"
 
 echo "All Elasticsearch indices ready ✅"

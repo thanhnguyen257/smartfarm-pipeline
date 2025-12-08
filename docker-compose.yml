@@ -126,11 +126,26 @@ services:
     depends_on:
       - spark-master
 
-  spark-job:
+  spark-job-telemetry:
     image: spark-image
-    container_name: spark-job
+    container_name: spark-job-telemetry
     environment:
       - SPARK_MODE=job
+      - SPARK_JOB_FILE=/opt/enrich_stream.py
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      kafka-setup:
+        condition: service_completed_successfully
+
+  spark-job-alert:
+    image: spark-image
+    container_name: spark-job-alert
+    environment:
+      - SPARK_MODE=job
+      - SPARK_JOB_FILE=/opt/alert_cleanup.py
+    volumes:
+      - ./data/alert_logs:/opt/alert_logs
     depends_on:
       spark-master:
         condition: service_healthy
@@ -148,32 +163,6 @@ services:
       - 18080:18080
     depends_on:
       - spark-master
-
-  # # run the python simulator inside container to avoid host env differences.
-  # simulator:
-  #   image: python:3.11-slim
-  #   container_name: simulator
-  #   command: bash -c "pip install -r /opt/app/requirements.txt && python /opt/app/simulator.py --config /opt/app/config/demo_config.yml --mode file"
-  #   volumes:
-  #     - ./:/opt/app
-  #   depends_on:
-  #     - broker1
-  #   # scale this service if you want multiple simulator instances (see instructions below)
-  #   deploy:
-  #     restart_policy:
-  #       condition: on-failure
-
-  # # optional spark job container: will run Spark submit and stream data from Kafka -> ES
-  # spark-job:
-  #   image: python:3.11-slim
-  #   container_name: spark-job
-  #   command: bash -c "pip install pyspark requests sqlite3 || true; python /opt/app/spark/enrich_stream.py --kafka bootstrap:localhost:9092 --sqlite /opt/app/data/locations.db --es http://elasticsearch:9200"
-  #   volumes:
-  #     - ./:/opt/app
-  #   depends_on:
-  #     - spark-master
-  #     - broker1
-  #     - elasticsearch
 
 volumes:
   es-data:

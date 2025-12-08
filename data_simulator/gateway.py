@@ -101,6 +101,7 @@ class Gateway:
             device_grouped = {}
             seen_devices = set()
             cooldown = self.cfg['alerts']['cooldown_seconds']
+            recovery_min_time = self.cfg['alerts']['recovery_min_time_seconds']
             for t in batch:
                 t.temperature = clamp(t.temperature, -10, 60)       # temperature (°C)
                 t.humidity = clamp(t.humidity, 0, 100)              # humidity (%)
@@ -123,7 +124,7 @@ class Gateway:
                 prev_state = prev.get('last_state', '')
                 prev_alert = prev.get('last_alert_ts', 0)
 
-                if (state == "OK" and prev_state == "CRITICAL") or \
+                if (state == "OK" and prev_state == "CRITICAL" and (now - prev_alert) >= recovery_min_time ) or \
                     (state == "CRITICAL" and (now - prev_alert) >= cooldown):
                     alert = {
                         **gateway_info,
