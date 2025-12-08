@@ -123,6 +123,24 @@ services:
     container_name: spark-worker
     environment:
       - SPARK_MODE=worker
+    deploy:
+      resources:
+        limits:
+          cpus: '8.0'
+          memory: 12g
+    depends_on:
+      - spark-master
+
+  spark-worker-2:
+    image: spark-image
+    container_name: spark-worker-2
+    environment:
+      - SPARK_MODE=worker
+    deploy:
+      resources:
+        limits:
+          cpus: '8.0'
+          memory: 12g
     depends_on:
       - spark-master
 
