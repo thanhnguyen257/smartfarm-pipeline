@@ -131,19 +131,6 @@ services:
     depends_on:
       - spark-master
 
-  spark-worker-2:
-    image: spark-image
-    container_name: spark-worker-2
-    environment:
-      - SPARK_MODE=worker
-    deploy:
-      resources:
-        limits:
-          cpus: '8.0'
-          memory: 12g
-    depends_on:
-      - spark-master
-
   spark-job-telemetry:
     image: spark-image
     container_name: spark-job-telemetry
@@ -181,6 +168,16 @@ services:
       - 18080:18080
     depends_on:
       - spark-master
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: ./notification_service/Dockerfile
+    image: notification-service-image
+    container_name: notification-service
+    depends_on:
+      kafka-setup:
+        condition: service_completed_successfully
 
 volumes:
   es-data:
