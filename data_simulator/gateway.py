@@ -27,7 +27,7 @@ class Gateway:
         self._aggregate_thread = threading.Thread(target=self._aggregate_loop, daemon=True)
         self._parquet_buffer = []
         self._map_device_gateway = get_list_idx(cfg['data']['locations_db'], 'gateway')
-        os.makedirs(cfg['data'].get('out_dir', './data/out'), exist_ok=True)
+        os.makedirs(cfg['data'].get('out_dir', './data/telemetry_raw'), exist_ok=True)
 
     def start(self):
         if hasattr(self.producer, 'start') and callable(self.producer.start):
@@ -208,7 +208,7 @@ if __name__ == '__main__':
     yaml = yaml.YAML(typ='safe', pure=True)
     cfg = yaml.load(open(args.config))
     if args.mode == 'file':
-        prod = FileProducer(cfg['data'].get('out_dir', './data/out'),
+        prod = FileProducer(cfg['data'].get('out_dir', './data/telemetry_raw'),
                             cfg['kafka']['topic_raw_telemetry'],
                             cfg['kafka']['topic_alerts'])
     else:

@@ -30,4 +30,4 @@ kafka:
 
 data:
   locations_db: ./data/locations.db
-  out_dir: ./data/out/
+  out_dir: ./data/telemetry_raw/

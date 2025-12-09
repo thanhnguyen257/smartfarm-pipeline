@@ -8,9 +8,9 @@ services:
     ports:
       - "2181:2181"
 
-  broker1:
+  kafka-broker:
     image: confluentinc/cp-server:7.7.0
-    container_name: broker1
+    container_name: kafka-broker
     depends_on:
       - zookeeper
     ports:
@@ -21,7 +21,7 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker1:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -31,7 +31,7 @@ services:
         soft: -1
         hard: -1
     healthcheck:
-      test: ["CMD", "cub", "kafka-ready", "-b", "broker1:29092", "1", "20"]
+      test: ["CMD", "cub", "kafka-ready", "-b", "kafka-broker:29092", "1", "20"]
       interval: 5s
       retries: 5
 
@@ -40,18 +40,18 @@ services:
     image: kafka-setup-image
     container_name: kafka-setup
     depends_on:
-      broker1:
+      kafka-broker:
         condition: service_healthy
 
   control-center:
     image: confluentinc/cp-enterprise-control-center:7.7.0
     container_name: control-center
     depends_on:
-      - broker1
+      - kafka-broker
     ports:
       - "9021:9021"
     environment:
-      CONTROL_CENTER_BOOTSTRAP_SERVERS: broker1:29092
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: kafka-broker:29092
       CONTROL_CENTER_REPLICATION_FACTOR: 1
       CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
       CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
@@ -178,6 +178,29 @@ services:
     depends_on:
       kafka-setup:
         condition: service_completed_successfully
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.1
+    container_name: airflow-scheduler
+    restart: always
+    env_file:
+      - .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./data/alert_logs:/opt/data/alert_logs
+      - ./data/telemetry_raw:/opt/data/telemetry_raw
+    command: >
+      bash -c "
+      airflow db init &&
+      airflow users create --username admin --firstname Admin --lastname User --password admin --role Admin --email admin@admin.com &&
+      airflow scheduler
+      "
 
 volumes:
   es-data:

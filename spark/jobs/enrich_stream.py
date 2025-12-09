@@ -9,9 +9,6 @@ from pyspark.sql.types import StructType, StructField, StringType, DoubleType, L
 import requests
 
 def send_to_es(df, epoch_id, es_url, output_index="farm_enriched_telemetry"):
-    """
-    Send Spark microbatch to Elasticsearch via REST Bulk API.
-    """
     if df.rdd.isEmpty():
         return
 
@@ -177,7 +174,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--kafka", default="broker1:29092", help="Kafka bootstrap servers")
+    parser.add_argument("--kafka", default="kafka-broker:29092", help="Kafka bootstrap servers")
     parser.add_argument("--input_topic", default="farm_raw_telemetry", help="Kafka input topic")
     parser.add_argument("--output_topic", default="farm_enrich_telemetry", help="Kafka output topic")
     parser.add_argument("--sqlite", default="/opt/locations.db", help="SQLite DB path for enrichment")

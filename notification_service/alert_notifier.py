@@ -62,7 +62,7 @@ Details: {alert.get("details")}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--kafka", default="broker1:29092")
+    parser.add_argument("--kafka", default="kafka-broker:29092")
     parser.add_argument("--sqlite", default="/app/alert_routes.db")
     parser.add_argument("--topic", default="farm_cleaned_alerts")
     args = parser.parse_args()

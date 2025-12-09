@@ -27,7 +27,7 @@ def raw_log_write(lines):
     if (_raw_log_file is None) or (now - _raw_log_last > RAW_LOG_WINDOW):
         if _raw_log_file:
             _raw_log_file.close()
-        fname = os.path.join(RAW_LOG_DIR, f"raw_kafka_{now}.log")
+        fname = os.path.join(RAW_LOG_DIR, f"raw_alert_{now}.log")
         _raw_log_file = open(fname, "a")
         _raw_log_last = now
 
@@ -217,7 +217,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--kafka", default="broker1:29092")
+    parser.add_argument("--kafka", default="kafka-broker:29092")
     parser.add_argument("--input_topic", default="farm_raw_alerts")
     parser.add_argument("--output_topic", default="farm_cleaned_alerts")
     parser.add_argument("--sqlite", default="/opt/locations.db")
