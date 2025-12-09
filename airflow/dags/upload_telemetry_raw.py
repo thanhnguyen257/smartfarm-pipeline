@@ -47,6 +47,7 @@ with DAG(
     start_date=datetime(2025, 1, 1),
     schedule_interval="*/15 * * * *",
     catchup=False,
+    is_paused_upon_creation=False,
 ) as dag:
 
     run = PythonOperator(
