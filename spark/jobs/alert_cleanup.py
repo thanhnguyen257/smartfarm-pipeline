@@ -210,6 +210,7 @@ def main(args):
         .outputMode("append") \
         .foreachBatch(process_alerts) \
         .option("checkpointLocation", "/tmp/spark_checkpoint/alert_cleanup") \
+        .trigger(processingTime="10 seconds") \
         .start()
 
     spark.streams.awaitAnyTermination()

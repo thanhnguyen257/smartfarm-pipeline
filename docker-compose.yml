@@ -126,8 +126,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '8.0'
-          memory: 12g
+          cpus: '18.0'
+          memory: 18g
     depends_on:
       - spark-master
 

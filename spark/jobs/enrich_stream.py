@@ -16,7 +16,7 @@ def send_to_es(df, epoch_id, es_url, output_index="farm_enriched_telemetry"):
 
     bulk_body = ""
     for r in rows:
-        bulk_body += f'{{ "index": {{ "_index": {output_index} }} }}\n'
+        bulk_body += f'{{ "index": {{ "_index": "{output_index}" }} }}\n'
         bulk_body += r + "\n"
 
     resp = requests.post(
@@ -168,6 +168,7 @@ def main(args):
         .outputMode("append") \
         .foreachBatch(lambda df, epoch_id: send_to_es(df, epoch_id, args.es, args.output_topic)) \
         .option("checkpointLocation", "/tmp/spark_checkpoint/farm_enrich_es_http") \
+        .trigger(processingTime="10 seconds") \
         .start()
     
     spark.streams.awaitAnyTermination()
@@ -176,7 +177,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--kafka", default="kafka-broker:29092", help="Kafka bootstrap servers")
     parser.add_argument("--input_topic", default="farm_raw_telemetry", help="Kafka input topic")
-    parser.add_argument("--output_topic", default="farm_enrich_telemetry", help="Kafka output topic")
+    parser.add_argument("--output_topic", default="farm_enriched_telemetry", help="Kafka output topic")
     parser.add_argument("--sqlite", default="/opt/locations.db", help="SQLite DB path for enrichment")
     parser.add_argument("--es", default="http://elasticsearch:9200", help="Elasticsearch endpoint")
     args = parser.parse_args()
