@@ -8,8 +8,8 @@ import uuid
 import ruamel.yaml as yaml
 
 # Vietnam approx bounding box (lat, lon)
-VN_LAT_MIN, VN_LAT_MAX = 8.0, 23.5
-VN_LON_MIN, VN_LON_MAX = 102.0, 109.5
+VN_LAT_MIN, VN_LAT_MAX = 11.5, 14.5
+VN_LON_MIN, VN_LON_MAX = 107.8, 108.8
 
 def random_point_in_radius(lat, lon, radius_m):
     # approximate: 1 deg lat ~ 111km, 1 deg lon ~ cos(lat)*111km
