@@ -165,7 +165,7 @@ class Gateway:
                 now = time.time()
                 out = {
                     'device_id': device_id,
-                    'gateway_id': gateway_id,
+                    'gateway_id': self._map_device_gateway[device_id],
                     'gateway_ts': int(now * 1000),
                     'gateway_ts_iso': datetime.fromtimestamp(now, tz=timezone.utc).isoformat(),
                     'count': len(items),
