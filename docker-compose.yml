@@ -111,7 +111,6 @@ services:
       - 4040-4045:4040-4045
     volumes:
       - ./data/spark-logs:/opt/spark/spark-events
-      - ./spark/apps:/opt/spark/apps
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 5s
@@ -123,6 +122,8 @@ services:
     container_name: spark-worker
     environment:
       - SPARK_MODE=worker
+    volumes:
+      - ./data/locations.db:/opt/locations.db
     deploy:
       resources:
         limits:
