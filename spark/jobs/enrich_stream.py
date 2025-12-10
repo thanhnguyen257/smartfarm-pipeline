@@ -8,6 +8,9 @@ from pyspark.sql.functions import col, from_json, udf, to_json, struct, get_json
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType, LongType
 import requests
 
+def now_millis():
+    return int(time.time() * 1000)
+
 def send_to_es(df, epoch_id, es_url, output_index="farm_enriched_telemetry"):
     if df.rdd.isEmpty():
         return
@@ -15,9 +18,12 @@ def send_to_es(df, epoch_id, es_url, output_index="farm_enriched_telemetry"):
     rows = df.toJSON().collect()
 
     bulk_body = ""
+    ts_now = now_millis()
     for r in rows:
+        doc = json.loads(r)
+        doc["ts_before_es"] = now_millis() 
         bulk_body += f'{{ "index": {{ "_index": "{output_index}" }} }}\n'
-        bulk_body += r + "\n"
+        bulk_body += json.dumps(doc) + "\n"
 
     resp = requests.post(
         f"{es_url}/_bulk",
@@ -133,6 +139,8 @@ def main(args):
 
     json_df = kafka_df.selectExpr("CAST(value AS STRING) as json_str")
     parsed_df = json_df.select(from_json(col("json_str"), schema).alias("d")).select("d.*")
+    now_millis_udf = udf(now_millis, LongType())
+    parsed_df = parsed_df.withColumn("ts_kafka_ingest", now_millis_udf())
 
     enrich_udf = udf(enrich_device, StringType())
     enriched_df = parsed_df.withColumn("loc_json", enrich_udf(col("device_id")))

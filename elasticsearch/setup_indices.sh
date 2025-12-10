@@ -10,11 +10,30 @@ until curl -s http://$ES_HOST:$ES_PORT/_cluster/health | grep '"status"' >/dev/n
 done
 echo "Elasticsearch is up ✅"
 
+echo "Creating ingest pipeline ingest_with_dates ..."
+
+curl -s -X PUT "http://$ES_HOST:$ES_PORT/_ingest/pipeline/ingest_with_dates" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "processors": [
+            {
+                "set": {
+                    "field": "created_at",
+                    "value": "{{_ingest.timestamp}}"
+                }
+            }
+        ]
+    }'
+
+echo "Pipeline created ✅"
+
 create_index() {
     INDEX_NAME=$1
     SETTINGS=$2
 
-    if curl -s -o /dev/null -w "%{http_code}" http://$ES_HOST:$ES_PORT/$INDEX_NAME | grep -q "404"; then
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$ES_HOST:$ES_PORT/$INDEX_NAME)
+
+    if [ "$HTTP_CODE" -eq 404 ]; then
         echo "Creating index: $INDEX_NAME"
         curl -s -X PUT "http://$ES_HOST:$ES_PORT/$INDEX_NAME" \
             -H 'Content-Type: application/json' \
@@ -29,10 +48,12 @@ create_index() {
 FARM_ENRICHED_TELEMETRY_SETTINGS='{
   "settings": {
     "number_of_shards": 1,
-    "number_of_replicas": 0
+    "number_of_replicas": 0,
+    "index.default_pipeline": "ingest_with_dates"
   },
   "mappings": {
     "properties": {
+      "created_at": { "type": "date" },
       "device_id": { "type": "keyword" },
       "gateway_id": { "type": "keyword" },
       "farm_id": { "type": "keyword" },
@@ -57,7 +78,9 @@ FARM_ENRICHED_TELEMETRY_SETTINGS='{
       "light_level_std": { "type": "float" },
       "device_location": { "type": "geo_point" },
       "gateway_location": { "type": "geo_point" },
-      "farm_location": { "type": "geo_point" }
+      "farm_location": { "type": "geo_point" },
+      "ts_kafka_ingest": { "type": "long" },
+      "ts_before_es": { "type": "long" }
     }
   }
 }'
@@ -65,10 +88,12 @@ FARM_ENRICHED_TELEMETRY_SETTINGS='{
 FARM_CLEANED_ALERTS_SETTINGS='{
   "settings": {
     "number_of_shards": 1,
-    "number_of_replicas": 0
+    "number_of_replicas": 0,
+    "index.default_pipeline": "ingest_with_dates"
   },
   "mappings": {
     "properties": {
+      "created_at": { "type": "date" },
       "device_id": { "type": "keyword" },
       "gateway_id": { "type": "keyword" },
       "farm_id": { "type": "keyword" },

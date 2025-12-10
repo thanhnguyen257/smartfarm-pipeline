@@ -16,6 +16,9 @@ RAW_LOG_WINDOW = 300
 _raw_log_last = 0
 _raw_log_file = None
 
+def now_millis():
+    return int(time.time() * 1000)
+
 def raw_log_write(lines):
     """
     Write raw kafka messages to rotating log files.
@@ -147,6 +150,9 @@ def main(args):
     json_df = kafka_df.selectExpr("CAST(value AS STRING) as json_str")
     raw_df = json_df.select(from_json(col("json_str"), schema).alias("a")).select("a.*")
 
+    now_millis_udf = udf(now_millis, LongType())
+    raw_df = raw_df.withColumn("ts_kafka_ingest", now_millis_udf())
+
     loc_udf = udf(enrich_loc, StringType())
     enriched_df = raw_df.withColumn("loc_json", loc_udf(col("device_id")))
 
@@ -179,6 +185,7 @@ def main(args):
         for a in alerts:
             obj = json.loads(a)
             if dedup_alert(obj["device_id"], obj["state"], obj["gateway_ts"]) == "KEEP":
+                obj["ts_before_es"] = now_millis()
                 cleaned.append(obj)
 
         if not cleaned:
