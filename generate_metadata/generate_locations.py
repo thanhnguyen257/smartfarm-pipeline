@@ -77,7 +77,7 @@ def main(cfg):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--sqlite", default="./data/locations.db")
-    parser.add_argument('--config', default='config.yml')
+    parser.add_argument('--config', default='./data_simulator/config.yml')
     args = parser.parse_args()
     yaml = yaml.YAML(typ='safe', pure=True)
     cfg = yaml.load(open(args.config))

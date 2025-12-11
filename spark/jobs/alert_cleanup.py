@@ -8,7 +8,7 @@ import os
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_json, udf, struct, to_json, get_json_object
-from pyspark.sql.types import ArrayType, StructType, StructField, StringType, LongType
+from pyspark.sql.types import ArrayType, StructType, StructField, StringType, LongType, DoubleType
 
 
 RAW_LOG_DIR = "/opt/alert_logs"
@@ -20,11 +20,7 @@ def now_millis():
     return int(time.time() * 1000)
 
 def raw_log_write(lines):
-    """
-    Write raw kafka messages to rotating log files.
-    Log rotates every RAW_LOG_WINDOW seconds.
-    """
-    global _raw_log_last, _raw_log_file
+    global _raw_log_last, _raw_log_file, RAW_LOG_DIR
     now = int(time.time())
 
     if (_raw_log_file is None) or (now - _raw_log_last > RAW_LOG_WINDOW):
@@ -116,7 +112,7 @@ def dedup_alert(device_id, state, ts):
 
 
 def main(args):
-    global loc_cache, RAW_LOG_WINDOW
+    global loc_cache, RAW_LOG_WINDOW, RAW_LOG_DIR
 
     RAW_LOG_WINDOW = args.raw_log_window
     RAW_LOG_DIR = args.raw_log_dir
@@ -182,11 +178,96 @@ def main(args):
         alerts = raw_lines
         cleaned = []
 
+        def to_int(v):
+            try:
+                if v is None:
+                    return None
+                if isinstance(v, (int,)):
+                    return int(v)
+                s = str(v)
+                if s == "" or s.lower() == "null":
+                    return None
+                return int(float(s))
+            except Exception:
+                return None
+
+        def to_float(v):
+            try:
+                if v is None:
+                    return None
+                if isinstance(v, (float, int)):
+                    return float(v)
+                s = str(v)
+                if s == "" or s.lower() == "null":
+                    return None
+                return float(s)
+            except Exception:
+                return None
+
+        def to_str(v):
+            if v is None:
+                return None
+            return str(v)
+
+        def to_details(v):
+            if v is None:
+                return []
+            if isinstance(v, list):
+                return [str(x) for x in v]
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return [str(x) for x in parsed]
+            except Exception:
+                pass
+            return [str(v)]
+
         for a in alerts:
             obj = json.loads(a)
-            if dedup_alert(obj["device_id"], obj["state"], obj["gateway_ts"]) == "KEEP":
+
+            dev_id = obj.get("device_id")
+            state = obj.get("state")
+            gw_ts = obj.get("gateway_ts")
+
+            gw_ts_val = to_int(gw_ts)
+
+            if dev_id is None or state is None or gw_ts_val is None:
+                continue
+
+            if dedup_alert(dev_id, state, gw_ts_val) == "KEEP":
                 obj["ts_before_es"] = now_millis()
-                cleaned.append(obj)
+
+                rec = {
+                    "device_id": to_str(obj.get("device_id")),
+                    "gateway_id": to_str(obj.get("gateway_id")),
+                    "gateway_ts": to_int(obj.get("gateway_ts")),
+                    "gateway_ts_iso": to_str(obj.get("gateway_ts_iso")),
+                    "state": to_str(obj.get("state")),
+                    "details": to_details(obj.get("details")),
+                    "ts_before_es": to_int(obj.get("ts_before_es")),
+                    "ts_kafka_ingest": to_int(obj.get("ts_kafka_ingest")),
+                    "farm_id": to_int(obj.get("farm_id") or obj.get("farmId") or obj.get("farm_id")),
+                    "farm_location": {
+                        "lat": to_float(obj.get("farm_location", {}).get("lat")
+                                        if isinstance(obj.get("farm_location"), dict) else (obj.get("farm_lat"))),
+                        "lon": to_float(obj.get("farm_location", {}).get("lon")
+                                        if isinstance(obj.get("farm_location"), dict) else (obj.get("farm_lon"))),
+                    },
+                    "gateway_location": {
+                        "lat": to_float(obj.get("gateway_location", {}).get("lat")
+                                        if isinstance(obj.get("gateway_location"), dict) else (obj.get("gateway_lat"))),
+                        "lon": to_float(obj.get("gateway_location", {}).get("lon")
+                                        if isinstance(obj.get("gateway_location"), dict) else (obj.get("gateway_lon"))),
+                    },
+                    "device_location": {
+                        "lat": to_float(obj.get("device_location", {}).get("lat")
+                                        if isinstance(obj.get("device_location"), dict) else (obj.get("device_lat"))),
+                        "lon": to_float(obj.get("device_location", {}).get("lon")
+                                        if isinstance(obj.get("device_location"), dict) else (obj.get("device_lon"))),
+                    }
+                }
+
+                cleaned.append(rec)
 
         if not cleaned:
             return
@@ -196,18 +277,44 @@ def main(args):
             bulk += f'{{ "index": {{ "_index": "{args.es_index}" }} }}\n'
             bulk += json.dumps(c) + "\n"
 
-        requests.post(
-            f"{args.es}/_bulk",
-            headers={"Content-Type": "application/x-ndjson"},
-            data=bulk
-        )
+        try:
+            requests.post(
+                f"{args.es}/_bulk",
+                headers={"Content-Type": "application/x-ndjson"},
+                data=bulk,
+                timeout=10
+            )
+        except Exception as e:
+            print("ES bulk error:", e)
 
-        kafka_out = (
-            spark.createDataFrame(cleaned)
+        out_schema = StructType([
+            StructField("device_id", StringType(), True),
+            StructField("gateway_id", StringType(), True),
+            StructField("gateway_ts", LongType(), True),
+            StructField("gateway_ts_iso", StringType(), True),
+            StructField("state", StringType(), True),
+            StructField("details", ArrayType(StringType()), True),
+            StructField("ts_before_es", LongType(), True),
+            StructField("ts_kafka_ingest", LongType(), True),
+            StructField("farm_id", LongType(), True),
+            StructField("farm_location", StructType([
+                StructField("lat", DoubleType(), True),
+                StructField("lon", DoubleType(), True)
+            ]), True),
+            StructField("gateway_location", StructType([
+                StructField("lat", DoubleType(), True),
+                StructField("lon", DoubleType(), True)
+            ]), True),
+            StructField("device_location", StructType([
+                StructField("lat", DoubleType(), True),
+                StructField("lon", DoubleType(), True)
+            ]), True),
+        ])
+
+        kafka_out_df = spark.createDataFrame(cleaned, schema=out_schema) \
             .select(to_json(struct("*")).alias("value"))
-        )
 
-        kafka_out.write \
+        kafka_out_df.write \
             .format("kafka") \
             .option("kafka.bootstrap.servers", args.kafka) \
             .option("topic", args.output_topic) \
