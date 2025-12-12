@@ -1,0 +1,280 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.7.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka-broker:
+    image: confluentinc/cp-server:7.7.0
+    container_name: kafka-broker
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 2
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 2
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test: ["CMD", "cub", "kafka-ready", "-b", "kafka-broker:29092", "1", "20"]
+      interval: 5s
+      retries: 5
+
+  kafka-broker-2:
+    image: confluentinc/cp-server:7.7.0
+    container_name: kafka-broker-2
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker-2:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 2
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 2
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+  kafka-broker-3:
+    image: confluentinc/cp-server:7.7.0
+    container_name: kafka-broker-3
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker-3:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 2
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 2
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+  kafka-setup:
+    build: ./kafka
+    image: kafka-setup-image
+    container_name: kafka-setup
+    depends_on:
+      kafka-broker:
+        condition: service_healthy
+
+  control-center:
+    image: confluentinc/cp-enterprise-control-center:7.7.0
+    container_name: control-center
+    depends_on:
+      - kafka-broker
+    ports:
+      - "9021:9021"
+    environment:
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: kafka-broker:29092
+      CONTROL_CENTER_REPLICATION_FACTOR: 1
+      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+      CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+      PORT: 9021
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.6
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 10s
+      retries: 5
+
+  elasticsearch-setup:
+    build: ./elasticsearch
+    image: elasticsearch-setup-image
+    container_name: elasticsearch-setup
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      kafka-setup:
+        condition: service_completed_successfully
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.19.6
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_NAME=kibana
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+  spark-master:
+    build:
+      context: .
+      dockerfile: ./spark/Dockerfile
+    image: spark-image
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+      - "8889:8889"
+      - 4040-4045:4040-4045
+    volumes:
+      - ./data/spark-logs:/opt/spark/spark-events
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 5s
+      retries: 10
+
+
+  spark-worker:
+    image: spark-image
+    container_name: spark-worker
+    environment:
+      - SPARK_MODE=worker
+    volumes:
+      - ./data/locations.db:/opt/locations.db
+    deploy:
+      resources:
+        limits:
+          cpus: '6.0'
+          memory: 6g
+    depends_on:
+      - spark-master
+
+  spark-worker-2:
+    image: spark-image
+    container_name: spark-worker-2
+    environment:
+      - SPARK_MODE=worker
+    volumes:
+      - ./data/locations.db:/opt/locations.db
+    deploy:
+      resources:
+        limits:
+          cpus: '6.0'
+          memory: 6g
+    depends_on:
+      - spark-master
+
+  spark-worker-3:
+    image: spark-image
+    container_name: spark-worker-3
+    environment:
+      - SPARK_MODE=worker
+    volumes:
+      - ./data/locations.db:/opt/locations.db
+    deploy:
+      resources:
+        limits:
+          cpus: '6.0'
+          memory: 6g
+    depends_on:
+      - spark-master
+
+  spark-job-telemetry:
+    image: spark-image
+    container_name: spark-job-telemetry
+    environment:
+      - SPARK_MODE=job
+      - SPARK_JOB_FILE=/opt/enrich_stream.py
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      kafka-setup:
+        condition: service_completed_successfully
+
+  spark-job-alert:
+    image: spark-image
+    container_name: spark-job-alert
+    environment:
+      - SPARK_MODE=job
+      - SPARK_JOB_FILE=/opt/alert_cleanup.py
+    volumes:
+      - ./data/alert_logs:/opt/alert_logs
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      kafka-setup:
+        condition: service_completed_successfully
+
+  spark-history:
+    image: spark-image
+    container_name: spark-history
+    environment:
+      - SPARK_MODE=history
+    volumes:
+      - ./data/spark-logs:/opt/spark/spark-events
+    ports:
+      - 18080:18080
+    depends_on:
+      - spark-master
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: ./notification_service/Dockerfile
+    image: notification-service-image
+    container_name: notification-service
+    depends_on:
+      kafka-setup:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.1
+    container_name: airflow-scheduler
+    restart: always
+    env_file:
+      - .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./data/alert_logs:/opt/data/alert_logs
+      - ./data/telemetry_raw:/opt/data/telemetry_raw
+    command: >
+      bash -c "
+      airflow db init &&
+      airflow users create --username admin --firstname Admin --lastname User --password admin --role Admin --email admin@admin.com &&
+      airflow scheduler
+      "
+
+volumes:
+  es-data:
